@@ -52,3 +52,9 @@ docs/_build/
 
 # PyBuilder
 target/
+
+# Data
+data/
+*.csv
+*.xlsx
+*.json

@@ -70,16 +70,16 @@ def parse_user_tasks(filename):
         print('Reading tasks file "{}"'.format(filename))
 
         for task_line in tasks:
-            data = defaultdict(list)
             users_tasks = json.loads(task_line)
+            email = normalize_email(users_tasks["email"])
+            data = tasks_per_user.setdefault(email, defaultdict(list))
+
             for task in users_tasks["files"]:
                 task_fname = normalize_fname(task)
                 data[task_fname[:3]].append((task_fname, task.strip()))
 
                 if len(data[task_fname[:3]]) > max_len:
                     max_len = len(data[task_fname[:3]])
-
-            tasks_per_user[normalize_email(users_tasks["email"])] = data
 
     return tasks_per_user
 

@@ -20,7 +20,12 @@ COL_LINK = 318  # Link to the original document
 COL_HASH = 319  # Hash column augmented in the processing
 COL_NOT_FOUND_IN_USER_TASKS = 320  # Debug flags
 COL_TASKNAME_IS_AMBIGUOS = 321  # Debug flags
-DEBUG_COLS = (COL_LINK, COL_NAME, COL_FILENAME, COL_EMAIL, COL_NOT_FOUND_IN_USER_TASKS, COL_TASKNAME_IS_AMBIGUOS)
+COL_NAME_NORMALIZED = 322  # Attempt to normalize lastnames
+COL_NAME_TROUBLESOME = 323  # Lastnames troublesomnes flag
+DEBUG_COLS = (
+    COL_LINK, COL_NAME, COL_FILENAME, COL_EMAIL, COL_NOT_FOUND_IN_USER_TASKS,
+    COL_TASKNAME_IS_AMBIGUOS, COL_NAME_NORMALIZED,
+    COL_NAME_TROUBLESOME)
 
 USELESS_COLS = (5, 6, 7, 8, 9, 10, COL_HASH)  # No point in processing and writing these into the output
 BOOLEAN_COLS = (2, 313, 315)  # Should be treated as booleans
@@ -29,6 +34,12 @@ NON_HASHABLE_COLS = (0, 1, 2, 3, 4, 312, 313, 314, 315, 316, 317)  # Technical f
 CAPITALIZE_COLS = (13, 14)
 YEAR_COLS = (3, 186, 190, 194, 198, 202, 206, 210, 214, 218, 222, 226, 230, 234, 238, 243, 245, 247, 249, 251, 253, 255,
              257, 259, 261, 263, 265, 267, 269, 271)  # Should be treated as year values (not subject to decimal detection)
+
+
+def title(s):
+    chunks = s.split()
+    chunks = map(lambda x: string.capwords(x, "-"), chunks)
+    return " ".join(chunks)
 
 
 class ValidationError(Exception):
@@ -58,7 +69,7 @@ def process_source(source_filename, tasks_filename, user_tasks_filename):
     # write_dest('processed_{:%Y-%m-%d_%H:%M:%S}.csv'.format(timestamp), deduplicate(data), header)
     # write_dest('invalid_{:%Y-%m-%d_%H:%M:%S}.csv'.format(timestamp), invalid, header)
 
-    write_debug_dest('processed_debug.csv', deduplicate(data), header)
+    write_debug_dest('processed_debug.csv', data, header)
     write_debug_dest('invalid_debug.csv', invalid, header)
 
 
@@ -74,6 +85,16 @@ def normalize_fname(filename):
 
 def normalize_email(email):
     return email.lower().strip().replace(" ", "")
+
+
+def normalize_name(name):
+    name = name.replace(";", " ").replace(".", " ").replace(",", " ") \
+        .replace("?", " ")
+
+    name = re.sub("\([^)]*\)", "", name)
+    name = re.sub("\s+", " ", name)
+
+    return name.strip()
 
 
 def parse_user_tasks(filename):
@@ -200,6 +221,10 @@ def augment(row, all_tasks, ambiguous_tasks, user_tasks):
     row += [""] * 10
     row[COL_TASKNAME_IS_AMBIGUOS] = False
     row[COL_NOT_FOUND_IN_USER_TASKS] = True
+
+    name_fragments = list(map(title, normalize_name(row[COL_NAME]).split(" ")))
+    row[COL_NAME_NORMALIZED] = " ".join(name_fragments[:3])
+    row[COL_NAME_TROUBLESOME] = len(name_fragments) != 3
 
     if row[COL_EMAIL] in user_tasks:
         tasks = user_tasks[row[COL_EMAIL]]

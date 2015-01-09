@@ -9,7 +9,7 @@ import Levenshtein
 
 from datetime import datetime
 from hashlib import md5
-from collections import defaultdict
+from collections import defaultdict, Counter
 from decimal import Decimal
 
 
@@ -18,6 +18,10 @@ COL_EMAIL = 4  # "Email" column number
 COL_NAME = 11  # "Full Name" column number
 COL_LINK = 318  # Link to the original document
 COL_HASH = 319  # Hash column augmented in the processing
+COL_NOT_FOUND_IN_USER_TASKS = 320  # Debug flags
+COL_TASKNAME_IS_AMBIGUOS = 321  # Debug flags
+DEBUG_COLS = (COL_LINK, COL_NAME, COL_FILENAME, COL_EMAIL, COL_NOT_FOUND_IN_USER_TASKS, COL_TASKNAME_IS_AMBIGUOS)
+
 USELESS_COLS = (5, 6, 7, 8, 9, 10, COL_HASH)  # No point in processing and writing these into the output
 BOOLEAN_COLS = (2, 313, 315)  # Should be treated as booleans
 #NON_HASHABLE_COLS = (0, 1, 4, 313, 315)  # Technical fields that shouldn't be used for deduplication, strict version
@@ -32,7 +36,7 @@ class ValidationError(Exception):
 
 
 def process_source(source_filename, tasks_filename, user_tasks_filename):
-    tasks = parse_tasks(tasks_filename)
+    tasks, ambiguous_tasks = parse_tasks(tasks_filename)
     user_tasks = parse_user_tasks(user_tasks_filename)
 
     header = None
@@ -45,18 +49,27 @@ def process_source(source_filename, tasks_filename, user_tasks_filename):
         print('Loading rows...')
         for row in reader:
             try:
-                data.append(augment(normalize(clean(row)), tasks, user_tasks))
+                data.append(augment(normalize(clean(row)), tasks, ambiguous_tasks, user_tasks))
             except ValidationError:
                 invalid.append(row)
         print('Loaded rows: {} and {} invalid'.format(len(data), len(invalid)))
 
-    timestamp = datetime.now()
-    write_dest('processed_{:%Y-%m-%d_%H:%M:%S}.csv'.format(timestamp), deduplicate(data), header)
-    write_dest('invalid_{:%Y-%m-%d_%H:%M:%S}.csv'.format(timestamp), invalid, header)
+    # timestamp = datetime.now()
+    # write_dest('processed_{:%Y-%m-%d_%H:%M:%S}.csv'.format(timestamp), deduplicate(data), header)
+    # write_dest('invalid_{:%Y-%m-%d_%H:%M:%S}.csv'.format(timestamp), invalid, header)
+
+    write_debug_dest('processed_debug.csv', deduplicate(data), header)
+    write_debug_dest('invalid_debug.csv', invalid, header)
 
 
 def normalize_fname(filename):
-    return filename.strip().replace(" ", "_").lower().rstrip('.pdf').rstrip('dekl').rstrip('.').split('/')[-1]
+    filename = filename.strip().replace(" ", "_").lower()
+
+    filename = re.sub("\.pdf$", "", filename)
+
+    # TODO: check if we should get rid of dekl/decl
+    filename = re.sub("\.dekl$", "", filename)
+    return filename.rstrip('.').split('/')[-1]
 
 
 def normalize_email(email):
@@ -65,7 +78,7 @@ def normalize_email(email):
 
 def parse_user_tasks(filename):
     tasks_per_user = {}
-    max_len = 0
+
     with open(filename, 'r') as tasks:
         print('Reading tasks file "{}"'.format(filename))
 
@@ -76,23 +89,24 @@ def parse_user_tasks(filename):
 
             for task in users_tasks["files"]:
                 task_fname = normalize_fname(task)
-                data[task_fname[:3]].append((task_fname, task.strip()))
 
-                if len(data[task_fname[:3]]) > max_len:
-                    max_len = len(data[task_fname[:3]])
+                data[task_fname[:3]].append((task_fname, task.strip()))
 
     return tasks_per_user
 
 
 def parse_tasks(filename):
     data = defaultdict(list)
+    ambiguous_tasks = Counter()
+
     with open(filename, 'r') as tasks:
         print('Reading tasks file "{}"'.format(filename))
         for task in tasks:
             task_fname = normalize_fname(task)
+            ambiguous_tasks.update([task_fname])
             data[task_fname[:3]].append((task_fname, task.strip()))
 
-    return data
+    return data, ambiguous_tasks
 
 
 def write_dest(filename, data, header):
@@ -100,7 +114,19 @@ def write_dest(filename, data, header):
         writer = csv.writer(dest)
         data.insert(0, header)
         for row in data:
-            writer.writerow([str(c) for i, c in enumerate(row) if i not in USELESS_COLS])
+            writer.writerow([str(c) for i, c in enumerate(row) if i in DEBUG_COLS])
+            # writer.writerow([str(c) for i, c in enumerate(row) if i not in USELESS_COLS])
+    print('Result was written to: {}'.format(filename))
+
+
+def write_debug_dest(filename, data, header):
+    with open(filename, 'w', newline='', encoding='utf-8') as dest:
+        writer = csv.writer(dest)
+
+        writer.writerow([str(c) for i, c in enumerate(header) if i in DEBUG_COLS])
+
+        for row in data:
+            writer.writerow([str(c) for i, c in enumerate(row) if i in DEBUG_COLS])
     print('Result was written to: {}'.format(filename))
 
 
@@ -154,8 +180,8 @@ def clean(row):
 
 def normalize(row):
     """Convert certain fields to a defined format"""
-    # Should have at least this
-    if row[COL_NAME] == '' or row[COL_FILENAME] == '':
+    # Should have at least one of this
+    if row[COL_NAME] == '' and row[COL_FILENAME] == '':
         raise ValidationError
 
     normalized_row = row.copy()
@@ -166,9 +192,14 @@ def normalize(row):
     return normalized_row
 
 
-def augment(row, all_tasks, user_tasks):
+def augment(row, all_tasks, ambiguous_tasks, user_tasks):
     """Add new helper columns to the dataset, e.g. hash and link to the original document"""
     filename = row[COL_FILENAME]
+
+    # Add some extra rows upfront
+    row += [""] * 10
+    row[COL_TASKNAME_IS_AMBIGUOS] = False
+    row[COL_NOT_FOUND_IN_USER_TASKS] = True
 
     if row[COL_EMAIL] in user_tasks:
         tasks = user_tasks[row[COL_EMAIL]]
@@ -177,6 +208,8 @@ def augment(row, all_tasks, user_tasks):
         # Beta tasks aren't represented in tasks.json
         if filename[:3] not in tasks:
             tasks = all_tasks
+        else:
+            row[COL_NOT_FOUND_IN_USER_TASKS] = False
     else:
         tasks = all_tasks
 
@@ -186,14 +219,17 @@ def augment(row, all_tasks, user_tasks):
         # Use Jaro-Winkler distance to get the best similarity guess between the normalized manually entered filename
         # and the value from tasks file normalized in the same way
         potential_links = map(lambda x: (Levenshtein.jaro_winkler(filename, x[0]), x[1]), tasks[filename[:3]])
-        row.append(max(potential_links)[1])
-    else:
+        row[COL_LINK] = max(potential_links)[1]
+    elif len(row[COL_NAME]) < 10:
         # If no prefix match just skip it entirely, it's most likely not a real filename
         raise ValidationError
 
+    if ambiguous_tasks[os.path.basename(row[COL_LINK])] > 1:
+        row[COL_TASKNAME_IS_AMBIGUOS] = True
+
     # A helper column for a simple hash-based deduplication attempt
     hashable_string = ':'.join((str(c) for i, c in enumerate(row) if i not in (NON_HASHABLE_COLS + USELESS_COLS)))
-    row.append(md5(hashable_string.encode('utf-8')).hexdigest())
+    row[COL_HASH] = md5(hashable_string.encode('utf-8')).hexdigest()
 
     return row
 

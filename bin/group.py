@@ -48,6 +48,7 @@ def group_by_link_and_name(data):
     not_used = []
     orphans = []
 
+    # Grouping by normalized name first.
     for d in data:
         name = d[COL_NAME_NORMALIZED]
         if name and grouper[name] > 1:
@@ -55,7 +56,8 @@ def group_by_link_and_name(data):
         else:
             not_used.append(d)
 
-    print(len(not_used))
+    # Attaching then the rest by matching their urls to urls of groups
+    # created on previous stage
     for d in not_used:
         for k, d2 in first_pass.items():
             if d[COL_LINK] in [x[COL_LINK] for x in d2]:
@@ -64,13 +66,13 @@ def group_by_link_and_name(data):
         else:
             orphans.append(d)
 
-    grouper2 = Counter()
-    grouper2.update(d[COL_LINK] for d in orphans)
+    second_pass = []
+    # Grouping the final chunk of unmatched data by urls
+    sorted_data = sorted(orphans, key=lambda x: x[COL_LINK])
+    for key, group in groupby(sorted_data, key=lambda x: x[COL_LINK]):
+        second_pass.append(list(group))
 
-    # for k, v in grouper2.most_common():
-    #     print(k, v)
-
-    save_intermediate_results("orphans.csv", orphans)
+    return list(first_pass.values()) + second_pass
 
 
 if __name__ == '__main__':

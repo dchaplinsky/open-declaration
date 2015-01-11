@@ -43,13 +43,16 @@ def group_by_link(data):
     return grouped_data
 
 
-def write_result(header, grouped_data, num_sheets):
+def write_result(header, grouped_data_items, num_sheets, highlight_cols=None):
     """Format and write data to an XLSX with pagination"""
+
+    if highlight_cols is None:
+        highlight_cols = []
+
     filename = 'formatted_{:%Y-%m-%d_%H:%M:%S}.xlsx'.format(datetime.now())
     print('Writing to XLSX workbook "{}"'.format(filename))
     workbook = xlsxwriter.Workbook(filename)
 
-    grouped_data_items = list(grouped_data.items())
     groups_per_sheet = len(grouped_data_items) // num_sheets
     for sheet_num in range(num_sheets):
         worksheet = workbook.add_worksheet('Book{}'.format(sheet_num + 1))
@@ -63,14 +66,15 @@ def write_result(header, grouped_data, num_sheets):
 
         row_pointer = 0  # Current row in the worksheet
         worksheet.write_row(row_pointer, 0, header)
-        for key, rows in sheet_groups:
+        for group_num, rows in enumerate(sheet_groups):
             for row_num, row in enumerate(rows):
                 row_pointer += 1
-                for col, cell in enumerate(row):
+                for col, cell in enumerate([group_num] + row):
+                    orig_col = col - 1
                     format = workbook.add_format()
                     # Highlight columns that contain non-matching cells
-                    if col in HIGHLIGHT_COLS:
-                        if any([x[col] != cell for i, x in enumerate(rows) if i != row_num]):
+                    if orig_col in highlight_cols:
+                        if any([x[orig_col] != cell for i, x in enumerate(rows) if i != row_num]):
                             format.set_bg_color('red')
                     # Handle the group borders
                     format.set_border_color('gray')
@@ -104,4 +108,5 @@ if __name__ == '__main__':
 
     header, data = load_source(source_filename)
     grouped_data = group_by_link(data)
-    write_result(header, grouped_data, num_sheets)
+    write_result(header, list(grouped_data.items()), num_sheets,
+                 HIGHLIGHT_COLS)

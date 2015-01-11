@@ -135,8 +135,7 @@ def write_dest(filename, data, header):
         writer = csv.writer(dest)
         data.insert(0, header)
         for row in data:
-            writer.writerow([str(c) for i, c in enumerate(row) if i in DEBUG_COLS])
-            # writer.writerow([str(c) for i, c in enumerate(row) if i not in USELESS_COLS])
+            writer.writerow([str(c) for i, c in enumerate(row) if i not in USELESS_COLS])
     print('Result was written to: {}'.format(filename))
 
 

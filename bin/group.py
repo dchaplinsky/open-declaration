@@ -3,6 +3,7 @@ import os
 import csv
 
 from collections import Counter, defaultdict
+from format import write_result, load_source
 from itertools import groupby
 
 COL_FILENAME = 0  # "Filename" column number
@@ -13,21 +14,6 @@ COL_NOT_FOUND_IN_USER_TASKS = 4
 COL_TASKNAME_IS_AMBIGUOS = 5
 COL_NAME_NORMALIZED = 6
 COL_NAME_TROUBLESOME = 7
-
-
-def load_source(filename):
-    header = None
-    data = []
-    with open(filename, 'r', newline='', encoding='utf-8') as source:
-        print('Reading the file "{}"'.format(filename))
-        reader = csv.reader(source)
-        header = next(reader)  # skip the header but store for later usage
-        print('Loading rows...')
-        for row in reader:
-            data.append(row)
-        print('Loaded rows: {}'.format(len(data)))
-
-    return header, data
 
 
 def save_intermediate_results(filename, data):
@@ -60,7 +46,7 @@ def group_by_link_and_name(data):
     # created on previous stage
     for d in not_used:
         for k, d2 in first_pass.items():
-            if d[COL_LINK] in [x[COL_LINK] for x in d2]:
+            if d[COL_LINK] and d[COL_LINK] in [x[COL_LINK] for x in d2]:
                 first_pass[k].append(d)
                 break
         else:
@@ -84,3 +70,5 @@ if __name__ == '__main__':
 
     header, data = load_source(source_filename)
     grouped_data = group_by_link_and_name(data)
+
+    write_result(header, grouped_data, 1, [COL_NAME_NORMALIZED])

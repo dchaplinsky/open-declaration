@@ -6,14 +6,18 @@ from collections import Counter, defaultdict
 from format import write_result, load_source
 from itertools import groupby
 
-COL_FILENAME = 0  # "Filename" column number
-COL_EMAIL = 1
-COL_FULLNAME = 2
-COL_LINK = 3
-COL_NOT_FOUND_IN_USER_TASKS = 4
-COL_TASKNAME_IS_AMBIGUOS = 5
-COL_NAME_NORMALIZED = 6
-COL_NAME_TROUBLESOME = 7
+DEBUG_COL_FILENAME = 0  # "Filename" column number
+DEBUG_COL_EMAIL = 1
+DEBUG_COL_FULLNAME = 2
+DEBUG_COL_LINK = 3
+DEBUG_COL_NOT_FOUND_IN_USER_TASKS = 4
+DEBUG_COL_TASKNAME_IS_AMBIGUOS = 5
+DEBUG_COL_NAME_NORMALIZED = 6
+DEBUG_COL_NAME_TROUBLESOME = 7
+
+COL_FILENAME = 1  # "Filename" column number
+COL_LINK = 312  # Link to the original document
+COL_NAME_NORMALIZED = 313
 
 
 def save_intermediate_results(filename, data):
@@ -42,6 +46,9 @@ def group_by_link_and_name(data):
         else:
             not_used.append(d)
 
+    print("{} rows was matched into {} groups on a first pass".format(len(data) - len(not_used), len(first_pass.keys())))
+    print("{} rows wasn't matched by name. Trying to match them by links to existing groups...".format(len(not_used)))
+
     # Attaching then the rest by matching their urls to urls of groups
     # created on previous stage
     for d in not_used:
@@ -52,13 +59,23 @@ def group_by_link_and_name(data):
         else:
             orphans.append(d)
 
+    print("{} rows wasn't matched by link to existing groups".format(len(orphans)))
+
     second_pass = []
     # Grouping the final chunk of unmatched data by urls
     sorted_data = sorted(orphans, key=lambda x: x[COL_LINK])
+    stupid_orphans = []
     for key, group in groupby(sorted_data, key=lambda x: x[COL_LINK]):
-        second_pass.append(list(group))
+        if not key:
+            stupid_orphans = list(group)
+        else:
+            second_pass.append(list(group))
 
-    return list(first_pass.values()) + second_pass
+    print("So we've grouped them by links only into {} groups".format(len(second_pass)))
+
+    print("{} has no link and also cannot be matched by name".format(len(stupid_orphans)))
+    print("{} groups was created".format(len(first_pass.keys()) + len(second_pass) + 1))
+    return list(first_pass.values()) + second_pass + [stupid_orphans]
 
 
 if __name__ == '__main__':

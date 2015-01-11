@@ -27,7 +27,8 @@ DEBUG_COLS = (
     COL_TASKNAME_IS_AMBIGUOS, COL_NAME_NORMALIZED,
     COL_NAME_TROUBLESOME)
 
-USELESS_COLS = (5, 6, 7, 8, 9, 10, COL_HASH)  # No point in processing and writing these into the output
+USELESS_COLS = (5, 6, 7, 8, 9, 10, COL_HASH, COL_NOT_FOUND_IN_USER_TASKS,
+                COL_TASKNAME_IS_AMBIGUOS, COL_NAME_TROUBLESOME)  # No point in processing and writing these into the output
 BOOLEAN_COLS = (2, 313, 315)  # Should be treated as booleans
 #NON_HASHABLE_COLS = (0, 1, 4, 313, 315)  # Technical fields that shouldn't be used for deduplication, strict version
 NON_HASHABLE_COLS = (0, 1, 2, 3, 4, 312, 313, 314, 315, 316, 317)  # Technical fields that shouldn't be used for deduplication
@@ -65,12 +66,12 @@ def process_source(source_filename, tasks_filename, user_tasks_filename):
                 invalid.append(row)
         print('Loaded rows: {} and {} invalid'.format(len(data), len(invalid)))
 
-    # timestamp = datetime.now()
-    # write_dest('processed_{:%Y-%m-%d_%H:%M:%S}.csv'.format(timestamp), deduplicate(data), header)
-    # write_dest('invalid_{:%Y-%m-%d_%H:%M:%S}.csv'.format(timestamp), invalid, header)
+    timestamp = datetime.now()
+    write_dest('processed_{:%Y-%m-%d_%H:%M:%S}.csv'.format(timestamp), data, header)
+    write_dest('invalid_{:%Y-%m-%d_%H:%M:%S}.csv'.format(timestamp), invalid, header)
 
-    write_debug_dest('processed_debug.csv', data, header)
-    write_debug_dest('invalid_debug.csv', invalid, header)
+    # write_debug_dest('processed_debug.csv', data, header)
+    # write_debug_dest('invalid_debug.csv', invalid, header)
 
 
 def normalize_fname(filename):

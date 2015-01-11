@@ -46,6 +46,7 @@ def group_by_link(data):
 def write_result(header, grouped_data_items, num_sheets, highlight_cols=None):
     """Format and write data to an XLSX with pagination"""
 
+    header = ["Номер групи"] + header
     if highlight_cols is None:
         highlight_cols = []
 
@@ -77,7 +78,7 @@ def write_result(header, grouped_data_items, num_sheets, highlight_cols=None):
                         if any([x[orig_col] != cell for i, x in enumerate(rows) if i != row_num]):
                             format.set_bg_color('red')
                     # Handle the group borders
-                    format.set_border_color('gray')
+                    format.set_border_color('black')
                     if row_num == 0:
                         format.set_top(1)
                     elif row_num == len(rows) - 1:
@@ -88,9 +89,11 @@ def write_result(header, grouped_data_items, num_sheets, highlight_cols=None):
                         worksheet.write_string(row_pointer, col, cell, format)
                     else:
                         worksheet.write(row_pointer, col, cell, format)
-            # Add an empty row between the groups
-            row_pointer += 1
-            worksheet.write_row(row_pointer, 0, [])
+
+            # Disabled for now
+            # # Add an empty row between the groups
+            # row_pointer += 1
+            # worksheet.write_row(row_pointer, 0, [])
         print('Wrote {} rows for sheet {}'.format(row_pointer + 1, sheet_num))
 
     workbook.close()

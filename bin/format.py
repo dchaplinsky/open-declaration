@@ -1,5 +1,6 @@
 import sys
 import os
+import re
 import csv
 
 import xlsxwriter
@@ -70,7 +71,20 @@ def write_result(header, grouped_data_items, num_sheets, highlight_cols=None):
         for group_num, rows in enumerate(sheet_groups):
             for row_num, row in enumerate(rows):
                 row_pointer += 1
+                prev_group = ""
+
                 for col, cell in enumerate([group_num] + row):
+                    # Here we are using number in front of header of current
+                    # column to determine if we are still in the same group
+                    new_group_started = True
+                    if len(header) > col:
+                        m = re.match("(\d+)", header[col])
+                        if m:
+                            if m.group(1) == prev_group:
+                                new_group_started = False
+                            else:
+                                prev_group = m.group(1)
+
                     orig_col = col - 1
                     format = workbook.add_format()
                     # Highlight columns that contain non-matching cells
@@ -78,11 +92,16 @@ def write_result(header, grouped_data_items, num_sheets, highlight_cols=None):
                         if any([x[orig_col] != cell for i, x in enumerate(rows) if i != row_num]):
                             format.set_bg_color('red')
                     # Handle the group borders
-                    format.set_border_color('black')
+                    format.set_border_color('#DDDDDD')
+                    format.set_border(1)
+
+                    if new_group_started:
+                        format.set_left_color('black')
+
                     if row_num == 0:
-                        format.set_top(1)
+                        format.set_top_color('black')
                     elif row_num == len(rows) - 1:
-                        format.set_bottom(1)
+                        format.set_bottom_color('black')
 
                     # Filenames might sometimes be detected as numbers and we don't want this
                     if col == COL_FILENAME:

@@ -14,6 +14,7 @@ from decimal import Decimal
 
 
 COL_FILENAME = 1  # "Filename" column number
+COL_DECL_YEAR = 3  # "Declaration for year" field
 COL_EMAIL = 4  # "Email" column number
 COL_NAME = 11  # "Full Name" column number
 COL_LINK = 318  # Link to the original document
@@ -35,6 +36,9 @@ NON_HASHABLE_COLS = (0, 1, 2, 3, 4, 312, 313, 314, 315, 316, 317)  # Technical f
 CAPITALIZE_COLS = (13, 14)
 YEAR_COLS = (3, 186, 190, 194, 198, 202, 206, 210, 214, 218, 222, 226, 230, 234, 238, 243, 245, 247, 249, 251, 253, 255,
              257, 259, 261, 263, 265, 267, 269, 271)  # Should be treated as year values (not subject to decimal detection)
+POTENTIAL_HIDDEN_COLS = range(11, 311)  # These might contain "приховано", pretty much most of them
+# One regexp to rule them all, one regexp to find them.
+HIDDEN_RE = re.compile(r'(?:дал[іы]|решта|інш[еі]|частково|частина|потім|аккуратно|адрес[ау])?\s*-?\s*пр[иіы]хован?н(?:[оаеі]|ий)|замазан[оае]?|зафарбован[оае]|заклеєн[оае]', flags=re.I)
 
 
 def title(s):
@@ -65,6 +69,8 @@ def process_source(source_filename, tasks_filename, user_tasks_filename):
             except ValidationError:
                 invalid.append(row)
         print('Loaded rows: {} and {} invalid'.format(len(data), len(invalid)))
+
+    # deduplicate(data)
 
     timestamp = datetime.now()
     write_dest('processed_{:%Y-%m-%d_%H:%M:%S}.csv'.format(timestamp), data, header)
@@ -168,11 +174,6 @@ def clean(row):
         elif col != '':
             if num in CAPITALIZE_COLS:
                 col = col[0].upper() + col[1:]
-            # People put this in whatever way they want
-            col = re.sub(r'["(-\[]приховано[")-\]]', 'приховано', col, flags=re.I)
-            if col == 'Приховано':
-                col = 'приховано'
-
             if num in YEAR_COLS:
                 # Fix year values
                 col = ''.join(filter(lambda x: x.isdigit(), col))
@@ -193,7 +194,19 @@ def clean(row):
             # Fix apostrophes
             col = re.sub(r'([^a-zA-Z\d_])["\'`*]([^a-zA-Z\d_])', r'\g<1>’\g<2>', col)
             # Fix Ukrainian "і"
-            col = re.sub(r'([^a-zA-Z\d_])[1i]([^a-zA-Z\d_])', r'\g<1>і\g<2>', col)
+            col = re.sub(r'([^a-zA-Z\d_\s/\\])[1i]([^a-zA-Z\d_\s/\\])', r'\g<1>і\g<2>', col)
+
+            # I'm gonna have dreams of "приховано"...
+            col = re.sub(HIDDEN_RE, 'приховано', col)
+            col = re.sub(r'["’\'(-\[*_</]приховано["’\')-\]*_>/]', 'приховано', col)
+            # Strip "hidden" marker from the value and mark it with a boolean
+            if num in POTENTIAL_HIDDEN_COLS and 'приховано' in col:
+                col = col.replace('приховано', '')
+                # Minimal cleanup for remaining stuff, possibly needs more than this
+                col = col.strip('.,;+-() ')
+                # TODO: mark and find a way to add it to the result in a non-obtrusive way, probably move result to JSON
+                # col = (col, True)
+
         cleaned_row.append(col)
 
     return cleaned_row
@@ -207,6 +220,9 @@ def normalize(row):
 
     normalized_row = row.copy()
 
+    # Assume it's a 2013 declaration if not stated otherwise
+    if row[COL_DECL_YEAR] == '':
+        normalized_row[COL_DECL_YEAR] = '2013'
     normalized_row[COL_NAME] = string.capwords(row[COL_NAME])
     normalized_row[COL_FILENAME] = normalize_fname(row[COL_FILENAME])
 

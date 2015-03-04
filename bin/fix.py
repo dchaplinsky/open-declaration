@@ -33,7 +33,7 @@ BOOLEAN_COLS = (2, 313, 315)  # Should be treated as booleans
 #NON_HASHABLE_COLS = (0, 1, 4, 313, 315)  # Technical fields that shouldn't be used for deduplication, strict version
 NON_HASHABLE_COLS = (0, 1, 2, 3, 4, 312, 313, 314, 315, 316, 317)  # Technical fields that shouldn't be used for deduplication
 CAPITALIZE_COLS = (13, 14)
-YEAR_COLS = (3, 186, 190, 194, 198, 202, 206, 210, 214, 218, 222, 226, 230, 234, 238, 243, 245, 247, 249, 251, 253, 255,
+YEAR_COLS = (3, 187, 191, 195, 199, 203, 207, 211, 215, 219, 223, 227, 231, 235, 239, 243, 245, 247, 249, 251, 253, 255,
              257, 259, 261, 263, 265, 267, 269, 271)  # Should be treated as year values (not subject to decimal detection)
 
 
@@ -173,7 +173,7 @@ def clean(row):
             if col == 'Приховано':
                 col = 'приховано'
 
-            if num in YEAR_COLS:
+            if num in YEAR_COLS and len(col) <= 10:
                 # Fix year values
                 col = ''.join(filter(lambda x: x.isdigit(), col))
                 if len(col) == 2:
